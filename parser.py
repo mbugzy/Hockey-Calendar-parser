@@ -1,0 +1,149 @@
+from dataclasses import dataclass
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+from logger import Logger
+import re
+import pytz
+
+logger = Logger(__name__)
+
+Months = {
+    'янв' : '01',
+    'фев' : '02',
+    'мар' : '03',
+    'апр' : '04',
+    'мая' : '05',
+    'июн' : '06',
+    'июл' : '07',
+    'авг' : '08',
+    'сен' : '09',
+    'окт' : '10',
+    'ноя' : '11',
+    'дек' : '12'
+}   
+
+@dataclass
+class Event:
+    dateTime: datetime | None = None
+    arena: str | None = None
+    league: str | None = None
+    teams: str | None = None
+
+
+
+def fetch_html(url):
+    """Fetches HTML content from the given URL."""
+    try:
+        ''' Header to mimic browser request to bypass captcha '''
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,ru;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
+        }
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        return response.text
+    except requests.RequestException as e:
+        logger.error(f"Error fetching URL {url}: {e}", exc_info=True)
+        return None
+
+def parse_events_lhl(html_content):    
+    events = []
+    if not html_content:
+        return events
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+    event_elements = soup.find('tbody').find_all('tr')
+
+    for element in event_elements:
+        try:            
+            info = element.find_all('td')
+            date = info[0].text[:-5]
+            time = info[1].text 
+            arena = info[2].text.strip() 
+            team1 = info[3].text.strip() 
+            team2 = info[5].text.strip() 
+            dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
+            dt = pytz.timezone('Europe/Minsk').localize(dt)
+            events.append(Event(dt,
+                                arena,
+                                'ЛХЛ',
+                                f'{team1} vs {team2}'))            
+        except Exception as e:
+            logger.error(f"Error parsing lhl games: {e}")
+        continue            
+
+    return events
+
+
+def parse_events_nhl(html_content):
+    events = []
+    logger.info(f"Parsing nhl games")
+    if not html_content:
+        logger.info(f"No HTML content for nhl games")
+        return events
+
+    soup = BeautifulSoup(html_content, 'html.parser')    
+    # last_games = soup.find('div', class_="timetable__unit js-calendar-last-games-header")
+    event_elements = soup.find_all('div', class_="timetable__unit js-calendar-games-header")    
+    try:
+        for unit_date in event_elements:
+            date_span = unit_date.find('span')            
+            
+            date_str = date_span.text.strip().split(' ') if date_span is not None and date_span.text.strip() != '(не задано)' else None             
+            date = date_str[0] + '.' + Months[date_str[1][:3]] + '.' + datetime.now().strftime('%Y') if date_str is not None else None    
+            games = unit_date.find_all('li')
+            for game in games:
+                time = game.find('div', class_="timetable__time").text.strip() if game.find('div', class_="timetable__time") is not None and game.find('div', class_="timetable__time").text != '(не задано)' else None            
+                place = game.find('span', class_="timetable__place-name")
+                arena = place.text.strip() if place is not None and place.text != '(не задано)' else None            
+                team1, team2 = game.find('div', class_="timetable__middle").find_all('div', class_="timetable__team-name")
+                team1 = team1.text.strip() if team1 is not None else None
+                team2 = team2.text.strip() if team2 is not None else None            
+                dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
+                dt = pytz.timezone('Europe/Minsk').localize(dt)
+                events.append(Event(dt,
+                                arena,
+                                'НХЛ',
+                                f'{team1} vs {team2}'))            
+        return events
+    except Exception as e:
+        logger.error(f"Error parsing nhl games: {e}")
+        return events
+
+
+def parse_events_alh(html_content):
+    events = []
+    if not html_content:
+        return events
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+    event_elements = soup.find_all('tr', class_=re.compile(r'^sectiontableentry\d$'))
+
+    for element in event_elements:
+        try:            
+            info = element.find_all('td')
+            date = info[2].text.strip() if info[0] is not None else None            
+            time = info[3].text.strip() if info[1] is not None else None
+            arena = info[1].text.strip() if info[2] is not None else None
+            team1 = info[4].text if info[3] is not None else None
+            team2 = info[8].text if info[5] is not None else None
+            dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
+            dt = pytz.timezone('Europe/Minsk').localize(dt)
+            events.append(Event(dt,
+                                arena,
+                                'АЛХ',
+                                f'{team1.strip()} vs {team2.strip()}'))
+        except Exception as e:
+            logger.error(f"Error parsing alh games: {e}")
+        continue            
+
+    return events
