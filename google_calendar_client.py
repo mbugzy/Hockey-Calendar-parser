@@ -71,7 +71,7 @@ def get_calendar_id_by_name(service, calendar_name):
     return None
 
 
-def create_event(service, event_data, calendar_name):            
+def insert_into_calendar(service, event_data, calendar_name):            
     try:
         event = service.events().insert(calendarId=get_calendar_id_by_name(service, calendar_name), body=event_data).execute()
         logger.info(f"Event created: { event['summary'], event['description'], event['start']['dateTime']}")
@@ -82,46 +82,46 @@ def create_event(service, event_data, calendar_name):
 
 
 
-def insert_into_calendar(service, events, calendars, count_success = True):
+def create_event(service, events, calendars, count_success = True):
     '''
     Inserts events from the list into the calendar.
     '''
     logger.info('Starting to update calendar')    
-    try:
-        counter = defaultdict(int)
-        for event in events:
-            if event.dateTime:
+    counter = defaultdict(int)
+    for event in events:
+        try:
+            if event.dateTime and event.arena in ARENAS:
                 event_data = {
-                    'summary': f"{ARENAS[event.arena]}" if event.arena is not None else 'Хз',
+                    'summary': f"{ARENAS[event.arena]}",
                     'description': f"{event.teams}",
                     'start': {
-                        'dateTime': f"{event.dateTime.strftime(dt_format)}" if event.dateTime is not None else None,
-                        'timeZone': 'Europe/Minsk' if event.dateTime is not None else None
+                        'dateTime': f"{event.dateTime.strftime(dt_format)}",
+                        'timeZone': 'Europe/Minsk'
                     },
                     'end': {
-                        'dateTime': f"{(event.dateTime+timedelta(minutes=75)).strftime(dt_format)}" if event.dateTime is not None else None,
-                        'timeZone': 'Europe/Minsk' if event.dateTime is not None else None
+                        'dateTime': f"{(event.dateTime+timedelta(minutes=75)).strftime(dt_format)}",
+                        'timeZone': 'Europe/Minsk'
                     },
                 }
-            match(event.league):
-                # League names are changed for my convenience in the calendar
-                case 'НХЛ':
-                    event_data['summary'] += ' сер'                         
-                    create_event(service, event_data, calendars['personal'])
-                    counter['сер'] += 1
-                    # create_event(service, event_data, calendars['common'])
-                case 'ЛХЛ':
-                    event_data['summary'] += ' Коля'
-                    # create_event(service, event_data, calendars['common'])
-                    counter['Коля'] += 1
-                case 'АЛХ':
-                    event_data['summary'] += ' АЛХ'
-                    # create_event(service, event_data, calendars['common'])
-                    counter['АЛХ'] += 1
-                case _:
-                    logger.error(f"Unknown league: {event.league}")
-    except Exception as e:
-        logger.error(f"Error updating calendar: {e}")     
+                match(event.league):
+                    # League names are changed for my convenience in the calendar
+                    case 'НХЛ':
+                        event_data['summary'] += ' сер'                         
+                        insert_into_calendar(service, event_data, calendars['personal'])
+                        counter['сер'] += 1
+                        # insert_into_calendar(service, event_data, calendars['common'])
+                    case 'ЛХЛ':
+                        event_data['summary'] += ' Коля'
+                        # insert_into_calendar(service, event_data, calendars['common'])
+                        counter['Коля'] += 1
+                    case 'АЛХ':
+                        event_data['summary'] += ' АЛХ'
+                        # insert_into_calendar(service, event_data, calendars['common'])
+                        counter['АЛХ'] += 1
+                    case _:
+                        logger.error(f"Unknown league: {event.league}")
+        except Exception as e:
+            logger.error(f"Error updating calendar: {e}")     
     if count_success:
         logger.info(f"Successfully added {', '.join(f'{key}: {value}' for key, value in counter.items())} events to calendar")
 
@@ -152,6 +152,6 @@ def refresh_calendar(service, calendars, events):
         logger.info(f"Deleted {', '.join(f'{key}: {value}' for key, value in del_counter.items())} events")
         add_counter = Counter(event.league for event in events)
         logger.info(f"Parsed {', '.join(f'{key}: {value}' for key, value in add_counter.items())} events")        
-        insert_into_calendar(service, events, calendars)
+        create_event(service, events, calendars)
     except Exception as e:
         logger.error(f"Couldn't refresh calendar: {e}")
