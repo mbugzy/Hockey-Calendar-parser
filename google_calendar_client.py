@@ -8,17 +8,12 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from logger import Logger
 import time
-from collections import Counter, defaultdict
+from collections import defaultdict
+from parser import Event
 
 logger = Logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 # Arena names are changed for my convenience in the calendar
-ARENAS = {
-    'Крытый каток ГУ ХК "Юность-Минск"' : 'Парк',
-    'Чижовка-Арена' : 'Чиж',
-    'Пристройка за Дворцом Спорта' : 'ДС',
-    'Олимпик Арена' : 'Олимп'
-}
 dt_format = '%Y-%m-%dT%H:%M:%S+03:00' # datetime format for google calendar
 
 def get_calendar_service():    
@@ -73,85 +68,87 @@ def get_calendar_id_by_name(service, calendar_name):
 
 def insert_into_calendar(service, event_data, calendar_name):            
     try:
-        event = service.events().insert(calendarId=get_calendar_id_by_name(service, calendar_name), body=event_data).execute()
-        logger.info(f"Event created: { event['summary'], event['description'], event['start']['dateTime']}")
+        event = service.events().insert(calendarId=get_calendar_id_by_name(service, calendar_name), body=to_calendar_format(event_data)).execute()
+        logger.info(f"Event created: {event_data}")
         return event
     except Exception as e:
-        logger.error(f"Couldn't create an event: {e}")
+        logger.error(f"Couldn't insert an event: {e}")
         return None
 
 
 
-def create_event(service, events, calendars, count_success = True):
+def to_calendar_format(event):
     '''
-    Inserts events from the list into the calendar.
+    Converts event from Event object to the format required by the google calendar.
     '''
-    logger.info('Starting to update calendar')    
-    counter = defaultdict(int)
-    for event in events:
-        try:
-            if event.dateTime and event.arena in ARENAS:
-                event_data = {
-                    'summary': f"{ARENAS[event.arena]}",
-                    'description': f"{event.teams}",
-                    'start': {
-                        'dateTime': f"{event.dateTime.strftime(dt_format)}",
-                        'timeZone': 'Europe/Minsk'
-                    },
-                    'end': {
-                        'dateTime': f"{(event.dateTime+timedelta(minutes=75)).strftime(dt_format)}",
-                        'timeZone': 'Europe/Minsk'
-                    },
-                }
-                match(event.league):
-                    # League names are changed for my convenience in the calendar
-                    case 'НХЛ':
-                        event_data['summary'] += ' сер'                         
-                        insert_into_calendar(service, event_data, calendars['personal'])
-                        counter['сер'] += 1
-                        # insert_into_calendar(service, event_data, calendars['common'])
-                    case 'ЛХЛ':
-                        event_data['summary'] += ' Коля'
-                        # insert_into_calendar(service, event_data, calendars['common'])
-                        counter['Коля'] += 1
-                    case 'АЛХ':
-                        event_data['summary'] += ' АЛХ'
-                        # insert_into_calendar(service, event_data, calendars['common'])
-                        counter['АЛХ'] += 1
-                    case _:
-                        logger.error(f"Unknown league: {event.league}")
-        except Exception as e:
-            logger.error(f"Error updating calendar: {e}")     
-    if count_success:
-        logger.info(f"Successfully added {', '.join(f'{key}: {value}' for key, value in counter.items())} events to calendar")
+    try:
+        event_data = {
+                'summary': f"{event.arena} {event.league}",
+                'description': f"{event.teams}",
+                'start': {
+                    'dateTime': f"{event.dateTime}",
+                    'timeZone': 'Europe/Minsk'
+                },
+                'end': {
+                    'dateTime': f"{(datetime.strptime(event.dateTime, dt_format)+timedelta(minutes=75)).strftime(dt_format)}",
+                    'timeZone': 'Europe/Minsk'
+                },
+            }
+    except Exception as e:
+        logger.error(f"Error converting event to calendar format: {e}")     
+    return event_data
 
 
+def from_calendar_format(event):
+    '''
+    Converts event from the format required by the google calendar to Event object.
+    '''
+    try:
+        return Event(dateTime=event['start']['dateTime'],
+                arena=event['summary'].split()[0], 
+                league=event['summary'].split()[1], 
+                teams=event['description'] or "")
+    except Exception as e:
+        logger.error(f"Error converting event from calendar format: {e}")     
 
-def add_to_table(table, event_data):
+
+def add_to_table(table, event):
     '''
     Adds events to the google sheet table.
     '''
     try:
         pass
     except Exception as e:
-        logger.error(f"Couldn't add event to table: {e}")
+        logger.error(f"Error adding event to table: {e}")
 
 
-def refresh_calendar(service, calendars, events):
+def refresh_calendar(service, calendars :dict[str, str], events :list[Event], count :bool = False):
     '''
-    Deletes future games from the calendar and readds them to avoid duplication
-    and to include posibility of cancellation. Past games are left as they are. 
+    Compares events in the calendar with events in the list to keep only their intersection.
     ''' 
     try:
-        event_list = service.events().list(calendarId=get_calendar_id_by_name(service, calendars['personal']), timeMin=(datetime.now()+timedelta(minutes=75)).strftime(dt_format)).execute()        
-        for event in event_list['items']:
-            if event['summary'].endswith('ер'):
-                service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']),eventId=event['id']).execute()
-                logger.info(f"Deleted event: {event['summary'], event['description'], event['start']['dateTime']}")
-        del_counter = Counter(event['summary'][-3:] for event in event_list['items'])
-        logger.info(f"Deleted {', '.join(f'{key}: {value}' for key, value in del_counter.items())} events")
-        add_counter = Counter(event.league for event in events)
-        logger.info(f"Parsed {', '.join(f'{key}: {value}' for key, value in add_counter.items())} events")        
-        create_event(service, events, calendars)
+        raw_cal_events = service.events().list(calendarId=get_calendar_id_by_name(service, calendars['personal']), 
+                        timeMin=(datetime.now()+timedelta(minutes=75)).strftime(dt_format)).execute()
+        calendar_event_objs = defaultdict(str)
+        new_count = 0
+        deleted_count = 0
+        # reformat events from calendar to Event objects with their ids
+        for event in raw_cal_events['items']:
+            calendar_event_objs.update({from_calendar_format(event): event['id']})            
+
+        # Add events that are in the parsed list but not in the calendar (new events)
+        for event in [x for x in events if x.league == "сер"]:
+            if event not in calendar_event_objs.keys():
+                insert_into_calendar(service, event, calendars['personal'])                
+                new_count += 1
+
+        # Delete events that are in the calendar but not in the parsed list (cancellations)             
+        for event, event_id in calendar_event_objs.items():
+            if event not in events:
+                service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
+                logger.info(f"Deleted event: {event}")
+                deleted_count += 1
+
+        logger.info(f"Added {new_count} events and deleted {deleted_count} events.")
     except Exception as e:
         logger.error(f"Couldn't refresh calendar: {e}")

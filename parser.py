@@ -8,6 +8,8 @@ import pytz
 
 logger = Logger(__name__)
 
+dt_format = '%Y-%m-%dT%H:%M:%S+03:00'
+
 Months = {
     'янв' : '01',
     'фев' : '02',
@@ -23,6 +25,13 @@ Months = {
     'дек' : '12'
 }   
 
+ARENAS = {
+    'Крытый каток ГУ ХК "Юность-Минск"' : 'Парк',
+    'Чижовка-Арена' : 'Чиж',
+    'Пристройка за Дворцом Спорта' : 'ДС',
+    'Олимпик Арена' : 'Олимп'
+}
+
 @dataclass
 class Event:
     dateTime: datetime | None = None
@@ -30,12 +39,18 @@ class Event:
     league: str | None = None
     teams: str | None = None
 
+    def __repr__(self):
+        return f"{self.arena} {self.league} {self.dateTime} {self.teams}"
+
+    def __hash__(self):
+        return hash((self.dateTime, self.teams))
+
 
 
 def fetch_html(url):
     """Fetches HTML content from the given URL."""
     try:
-        ''' Header to mimic browser request to bypass captcha '''
+        # Header to mimic browser request to bypass captcha
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -55,8 +70,10 @@ def fetch_html(url):
         logger.error(f"Error fetching URL {url}: {e}", exc_info=True)
         return None
 
-def parse_events_lhl(html_content):    
+def parse_events_lhl(url):    
     events = []
+    html_content = fetch_html(url)
+
     if not html_content:
         return events
 
@@ -68,14 +85,14 @@ def parse_events_lhl(html_content):
             info = element.find_all('td')
             date = info[0].text[:-5]
             time = info[1].text 
-            arena = info[2].text.strip() 
+            arena = ARENAS[info[2].text.strip()]
             team1 = info[3].text.strip() 
             team2 = info[5].text.strip() 
             dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
-            dt = pytz.timezone('Europe/Minsk').localize(dt)
+            dt = pytz.timezone('Europe/Minsk').localize(dt).strftime(dt_format)
             events.append(Event(dt,
                                 arena,
-                                'ЛХЛ',
+                                'Коля',
                                 f'{team1} vs {team2}'))            
         except Exception as e:
             logger.error(f"Error parsing lhl games: {e}")
@@ -84,9 +101,10 @@ def parse_events_lhl(html_content):
     return events
 
 
-def parse_events_nhl(html_content):
+def parse_events_nhl(url):
     events = []
-    logger.info(f"Parsing nhl games")
+    html_content = fetch_html(url)
+
     if not html_content:
         logger.info(f"No HTML content for nhl games")
         return events
@@ -104,15 +122,16 @@ def parse_events_nhl(html_content):
             for game in games:
                 time = game.find('div', class_="timetable__time").text.strip() if game.find('div', class_="timetable__time") is not None and game.find('div', class_="timetable__time").text != '(не задано)' else None            
                 place = game.find('span', class_="timetable__place-name")
-                arena = place.text.strip() if place is not None and place.text != '(не задано)' else None            
+                arena = place.text.strip() if place and place.text != '(не задано)' else None
+                arena = ARENAS[arena] if arena in ARENAS else arena
                 team1, team2 = game.find('div', class_="timetable__middle").find_all('div', class_="timetable__team-name")
-                team1 = team1.text.strip() if team1 is not None else None
-                team2 = team2.text.strip() if team2 is not None else None            
+                team1 = team1.text.strip() if team1 else None
+                team2 = team2.text.strip() if team2 else None            
                 dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
-                dt = pytz.timezone('Europe/Minsk').localize(dt)
+                dt = pytz.timezone('Europe/Minsk').localize(dt).strftime(dt_format)
                 events.append(Event(dt,
                                 arena,
-                                'НХЛ',
+                                'сер',
                                 f'{team1} vs {team2}'))            
         return events
     except Exception as e:
@@ -120,8 +139,9 @@ def parse_events_nhl(html_content):
         return events
 
 
-def parse_events_alh(html_content):
+def parse_events_alh(url):
     events = []
+    html_content = fetch_html(url)
     if not html_content:
         return events
 
@@ -131,17 +151,18 @@ def parse_events_alh(html_content):
     for element in event_elements:
         try:            
             info = element.find_all('td')
-            date = info[2].text.strip() if info[0] is not None else None            
-            time = info[3].text.strip() if info[1] is not None else None
-            arena = info[1].text.strip() if info[2] is not None else None
-            team1 = info[4].text if info[3] is not None else None
-            team2 = info[8].text if info[5] is not None else None
+            date = info[2].text.strip() if info[0] else None            
+            time = info[3].text.strip() if info[1] else None
+            arena = info[1].text.strip() if info[2] else None
+            arena = ARENAS[arena] if arena in ARENAS else arena
+            team1 = info[4].text.strip() if info[3] else None
+            team2 = info[8].text.strip() if info[5] else None
             dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
-            dt = pytz.timezone('Europe/Minsk').localize(dt)
+            dt = pytz.timezone('Europe/Minsk').localize(dt).strftime(dt_format)
             events.append(Event(dt,
                                 arena,
                                 'АЛХ',
-                                f'{team1.strip()} vs {team2.strip()}'))
+                                f'{team1} vs {team2}'))
         except Exception as e:
             logger.error(f"Error parsing alh games: {e}")
         continue            

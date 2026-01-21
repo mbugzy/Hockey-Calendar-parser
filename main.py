@@ -17,16 +17,13 @@ if __name__ == "__main__":
 
     service = ggc.get_calendar_service()
     events = []
-    # html_content = p.fetch_html(urls['league_urls']['lhl']) 
-    # events.extend(p.parse_events_lhl(html_content))    
+    # events.extend(p.parse_events_lhl(urls['league_urls']['lhl']))    
             
-    html_content = p.fetch_html(urls['league_urls']['nhl'])
-    events.extend(p.parse_events_nhl(html_content))                
+    events.extend(p.parse_events_nhl(urls['league_urls']['nhl']))                
 
-    # html_content = p.fetch_html(urls['league_urls']['alh'])        
-    # events.extend(p.parse_events_alh(html_content))      
+    # events.extend(p.parse_events_alh(urls['league_urls']['alh']))      
     
-    events = [event for event in events if event.dateTime >= datetime.now().astimezone()] 
+    events = [event for event in events if event.dateTime >= datetime.now().strftime(p.dt_format)] 
     
     ggc.refresh_calendar(service, urls['cals'], events)
     logger.info("-"*80)
