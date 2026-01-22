@@ -25,11 +25,13 @@ Months = {
     'дек' : '12'
 }   
 
+# Arena names are changed for my convenience in the calendar
 ARENAS = {
-    'Крытый каток ГУ ХК "Юность-Минск"' : 'Парк',
-    'Чижовка-Арена' : 'Чиж',
-    'Пристройка за Дворцом Спорта' : 'ДС',
-    'Олимпик Арена' : 'Олимп'
+    'Крытый каток ГУ ХК "Юность-Минск"': 'Парк',
+    'Чижовка-Арена': 'Чиж',
+    'Пристройка за Дворцом Спорта': 'ДС',
+    'Олимпик Арена': 'Олимп',
+    'Хз': 'Хз'
 }
 
 @dataclass
@@ -39,6 +41,9 @@ class Event:
     league: str | None = None
     teams: str | None = None
 
+    def __eq__(self, other):
+        return self.dateTime == other.dateTime and self.teams == other.teams
+    
     def __repr__(self):
         return f"{self.arena} {self.league} {self.dateTime} {self.teams}"
 
@@ -47,7 +52,7 @@ class Event:
 
 
 
-def fetch_html(url):
+def fetch_html(url: str) -> str | None:
     """Fetches HTML content from the given URL."""
     try:
         # Header to mimic browser request to bypass captcha
@@ -70,7 +75,7 @@ def fetch_html(url):
         logger.error(f"Error fetching URL {url}: {e}", exc_info=True)
         return None
 
-def parse_events_lhl(url):    
+def parse_events_lhl(url: str) -> list[Event]:    
     events = []
     html_content = fetch_html(url)
 
@@ -92,16 +97,16 @@ def parse_events_lhl(url):
             dt = pytz.timezone('Europe/Minsk').localize(dt).strftime(dt_format)
             events.append(Event(dt,
                                 arena,
-                                'Коля',
+                                'коля',
                                 f'{team1} vs {team2}'))            
         except Exception as e:
             logger.error(f"Error parsing lhl games: {e}")
-        continue            
+        continue
 
     return events
 
 
-def parse_events_nhl(url):
+def parse_events_nhl(url: str) -> list[Event]:
     events = []
     html_content = fetch_html(url)
 
@@ -116,13 +121,13 @@ def parse_events_nhl(url):
         for unit_date in event_elements:
             date_span = unit_date.find('span')            
             
-            date_str = date_span.text.strip().split(' ') if date_span is not None and date_span.text.strip() != '(не задано)' else None             
-            date = date_str[0] + '.' + Months[date_str[1][:3]] + '.' + datetime.now().strftime('%Y') if date_str is not None else None    
+            date_str = date_span.text.strip().split(' ') if date_span and date_span.text.strip() != '(не задано)' else None             
+            date = date_str[0] + '.' + Months[date_str[1][:3]] + '.' + datetime.now().strftime('%Y') if date_str else None    
             games = unit_date.find_all('li')
             for game in games:
-                time = game.find('div', class_="timetable__time").text.strip() if game.find('div', class_="timetable__time") is not None and game.find('div', class_="timetable__time").text != '(не задано)' else None            
+                time = game.find('div', class_="timetable__time").text.strip() if game.find('div', class_="timetable__time") and game.find('div', class_="timetable__time").text != '(не задано)' else None            
                 place = game.find('span', class_="timetable__place-name")
-                arena = place.text.strip() if place and place.text != '(не задано)' else None
+                arena = place.text.strip() if place and place.text != '(не задано)' else 'Хз'
                 arena = ARENAS[arena] if arena in ARENAS else arena
                 team1, team2 = game.find('div', class_="timetable__middle").find_all('div', class_="timetable__team-name")
                 team1 = team1.text.strip() if team1 else None
@@ -139,7 +144,7 @@ def parse_events_nhl(url):
         return events
 
 
-def parse_events_alh(url):
+def parse_events_alh(url: str) -> list[Event]:
     events = []
     html_content = fetch_html(url)
     if not html_content:

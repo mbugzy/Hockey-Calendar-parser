@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
+from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 from logger import Logger
 import time
@@ -13,10 +13,10 @@ from parser import Event
 
 logger = Logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-# Arena names are changed for my convenience in the calendar
+
 dt_format = '%Y-%m-%dT%H:%M:%S+03:00' # datetime format for google calendar
 
-def get_calendar_service():    
+def get_calendar_service() -> Resource:    
     '''
     Returns a service object for the Google Calendar API.
     '''
@@ -47,7 +47,7 @@ def get_calendar_service():
         return None
 
 
-def get_calendar_id_by_name(service, calendar_name):
+def get_calendar_id_by_name(service: Resource, calendar_name: str) -> str:
     '''
     Returns the ID of the calendar with the given name.
     '''
@@ -66,18 +66,16 @@ def get_calendar_id_by_name(service, calendar_name):
     return None
 
 
-def insert_into_calendar(service, event_data, calendar_name):            
+def insert_into_calendar(service: Resource, event_data: Event, calendar_name: str):            
     try:
-        event = service.events().insert(calendarId=get_calendar_id_by_name(service, calendar_name), body=to_calendar_format(event_data)).execute()
+        service.events().insert(calendarId=get_calendar_id_by_name(service, calendar_name), body=to_calendar_format(event_data)).execute()
         logger.info(f"Event created: {event_data}")
-        return event
     except Exception as e:
         logger.error(f"Couldn't insert an event: {e}")
-        return None
 
 
 
-def to_calendar_format(event):
+def to_calendar_format(event: Event) -> dict[str, str | dict[str]]:
     '''
     Converts event from Event object to the format required by the google calendar.
     '''
@@ -99,20 +97,19 @@ def to_calendar_format(event):
     return event_data
 
 
-def from_calendar_format(event):
+def from_calendar_format(event: dict[str, str | dict[str]]) -> Event:
     '''
     Converts event from the format required by the google calendar to Event object.
     '''
     try:
-        return Event(dateTime=event['start']['dateTime'],
-                arena=event['summary'].split()[0], 
-                league=event['summary'].split()[1], 
-                teams=event['description'] or "")
+        return Event(event.get('start', {}).get('dateTime', ''),
+                    *event.get('summary', '').split(), 
+                    event.get('description', ''))
     except Exception as e:
         logger.error(f"Error converting event from calendar format: {e}")     
 
 
-def add_to_table(table, event):
+def add_to_table(table: Resource, event: Event):
     '''
     Adds events to the google sheet table.
     '''
@@ -122,7 +119,7 @@ def add_to_table(table, event):
         logger.error(f"Error adding event to table: {e}")
 
 
-def refresh_calendar(service, calendars :dict[str, str], events :list[Event], count :bool = False):
+def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events: list[Event]):
     '''
     Compares events in the calendar with events in the list to keep only their intersection.
     ''' 
@@ -134,20 +131,21 @@ def refresh_calendar(service, calendars :dict[str, str], events :list[Event], co
         deleted_count = 0
         # reformat events from calendar to Event objects with their ids
         for event in raw_cal_events['items']:
-            calendar_event_objs.update({from_calendar_format(event): event['id']})            
+            calendar_event_objs.update({from_calendar_format(event): event['id']})    
 
         # Add events that are in the parsed list but not in the calendar (new events)
-        for event in [x for x in events if x.league == "сер"]:
+        for event in [x for x in parsed_events if x.league == "сер"]:
             if event not in calendar_event_objs.keys():
                 insert_into_calendar(service, event, calendars['personal'])                
                 new_count += 1
 
         # Delete events that are in the calendar but not in the parsed list (cancellations)             
         for event, event_id in calendar_event_objs.items():
-            if event not in events:
-                service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
-                logger.info(f"Deleted event: {event}")
-                deleted_count += 1
+            if event not in parsed_events:
+                if event.league == "сер":
+                    service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
+                    logger.info(f"Deleted event: {event}")
+                    deleted_count += 1
 
         logger.info(f"Added {new_count} events and deleted {deleted_count} events.")
     except Exception as e:
