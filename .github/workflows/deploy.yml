@@ -20,4 +20,4 @@ jobs:
             cd ${{ secrets.SSH_PATH }}
             git pull origin master
             # Add any reload commands here, e.g., restarting a service or environment
-            # source venv/bin/activate && pip install -r requirements.txt
+            source venv/bin/activate && pip install -r requirements.txt

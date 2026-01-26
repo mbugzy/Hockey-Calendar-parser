@@ -31,7 +31,6 @@ ARENAS = {
     'Чижовка-Арена': 'Чиж',
     'Пристройка за Дворцом Спорта': 'ДС',
     'Олимпик Арена': 'Олимп',
-    'Хз': 'Хз'
 }
 
 @dataclass
@@ -126,18 +125,16 @@ def parse_events_nhl(url: str) -> list[Event]:
             games = unit_date.find_all('li')
             for game in games:
                 time = game.find('div', class_="timetable__time").text.strip() if game.find('div', class_="timetable__time") and game.find('div', class_="timetable__time").text != '(не задано)' else None            
-                place = game.find('span', class_="timetable__place-name")
-                arena = place.text.strip() if place and place.text != '(не задано)' else 'Хз'
-                arena = ARENAS[arena] if arena in ARENAS else arena
-                team1, team2 = game.find('div', class_="timetable__middle").find_all('div', class_="timetable__team-name")
-                team1 = team1.text.strip() if team1 else None
-                team2 = team2.text.strip() if team2 else None            
+                place = game.find('span', class_="timetable__place-name").text.strip()
+                arena = ARENAS[place if place and place != '(не задано)' else 'Хз'] if place in ARENAS else None
+                team1, team2 = (x.text.strip() for x in game.find('div', class_="timetable__middle").find_all('div', class_="timetable__team-name"))
                 dt = datetime.strptime(f"{date.strip()} {time.strip()}", "%d.%m.%Y %H:%M")
                 dt = pytz.timezone('Europe/Minsk').localize(dt).strftime(dt_format)
-                events.append(Event(dt,
-                                arena,
-                                'сер',
-                                f'{team1} vs {team2}'))            
+                if arena is not None:
+                    events.append(Event(dt,
+                                        arena,
+                                        'сер',
+                                        f'{team1} vs {team2}'))            
         return events
     except Exception as e:
         logger.error(f"Error parsing nhl games: {e}")
