@@ -40,11 +40,20 @@ league_name = url_to_schedule
 [cals]
 personal = # for personal calendar
 common = # for common calendar (like arbiters)
+
+[telegram]
+token = # your telegram bot token
+chat_id = # your telegram chat id
 ```
 3. Parser should be updated to parse the structure of your site(find html tags of your schedule using F12 in your browser and update parser functions) 
 4. Run the script or install the script as a cron job
 ```bash
 python main.py
 ```
+
+## Features
+- **Automatic Sync**: Syncs games from multiple hockey leagues to Google Calendar.
+- **Telegram Notifications**: Sends instant notifications to Telegram when new games are added or existing games are deleted/changed.
+
 
 
