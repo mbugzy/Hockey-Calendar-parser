@@ -1,0 +1,12 @@
+[league_urls]
+league_name = url_to_schedule
+
+[cals]
+calendar_name_in_code = calendar_name_in_google
+
+[google_table_urls]
+table_name = table_url
+
+[telegram]
+token = telegram_bot_token
+chat_id = telegram_chat_id
