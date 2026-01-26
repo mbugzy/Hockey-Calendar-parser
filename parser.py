@@ -9,6 +9,7 @@ import pytz
 logger = Logger(__name__)
 
 dt_format = '%Y-%m-%dT%H:%M:%S+03:00'
+human_format = '%d.%m %H:%M'
 
 Months = {
     'янв' : '01',
@@ -45,6 +46,9 @@ class Event:
     
     def __repr__(self):
         return f"{self.arena} {self.league} {self.dateTime} {self.teams}"
+
+    def __str__(self):
+        return f"{self.arena} {self.league} {datetime.strptime(self.dateTime, dt_format).strftime(human_format)} {self.teams}"
 
     def __hash__(self):
         return hash((self.dateTime, self.teams))

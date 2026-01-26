@@ -1,4 +1,3 @@
-import calendar
 import os.path
 from datetime import datetime, timedelta
 from google.auth.transport.requests import Request
@@ -7,9 +6,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from googleapiclient.errors import HttpError
 from logger import Logger
-import time
 from collections import defaultdict
 from parser import Event
+from telegram_notifications import send_notification
 
 logger = Logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -69,7 +68,7 @@ def get_calendar_id_by_name(service: Resource, calendar_name: str) -> str:
 def insert_into_calendar(service: Resource, event_data: Event, calendar_name: str):            
     try:
         service.events().insert(calendarId=get_calendar_id_by_name(service, calendar_name), body=to_calendar_format(event_data)).execute()
-        logger.info(f"Event created: {event_data}")
+        logger.info(f"Event created: {event_data}")        
     except Exception as e:
         logger.error(f"Couldn't insert an event: {e}")
 
@@ -136,7 +135,8 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
         # Add events that are in the parsed list but not in the calendar (new events)
         for event in [x for x in parsed_events if x.league == "сер"]:
             if event not in calendar_event_objs.keys():
-                insert_into_calendar(service, event, calendars['personal'])                
+                insert_into_calendar(service, event, calendars['personal'])
+                send_notification(f"Новая игра: {event}")             
                 new_count += 1
 
         # Delete events that are in the calendar but not in the parsed list (cancellations)             
@@ -145,8 +145,13 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
                 if event.league == "сер":
                     service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
                     logger.info(f"Deleted event: {event}")
+                    send_notification(f"Отменена игра: {event}")
                     deleted_count += 1
 
-        logger.info(f"Added {new_count} events and deleted {deleted_count} events.")
+        if new_count > 0 or deleted_count > 0:
+            logger.info(f"Added {new_count} events and deleted {deleted_count} events.")
+            send_notification(f"{f'Добавлено {new_count} игр' if new_count > 0 else ''}{f'\nУдалено {deleted_count} игр' if deleted_count > 0 else ''}")
+        else:
+            logger.info("No changes detected.")
     except Exception as e:
         logger.error(f"Couldn't refresh calendar: {e}")
