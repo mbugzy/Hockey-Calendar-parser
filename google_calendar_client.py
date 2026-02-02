@@ -8,7 +8,8 @@ from googleapiclient.errors import HttpError
 from logger import Logger
 from collections import defaultdict
 from parser import Event
-from telegram_notifications import send_notification
+from telegram_notifications import ask_confirmation, send_notification
+import json
 
 logger = Logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -127,7 +128,7 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
                         timeMin=(datetime.now()+timedelta(minutes=75)).strftime(dt_format)).execute()
         calendar_event_objs = defaultdict(str)
         new_count = 0
-        deleted_count = 0
+        del_count = 0
         # reformat events from calendar to Event objects with their ids
         for event in raw_cal_events['items']:
             calendar_event_objs.update({from_calendar_format(event): event['id']})    
@@ -135,23 +136,31 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
         # Add events that are in the parsed list but not in the calendar (new events)
         for event in [x for x in parsed_events if x.league == "сер"]:
             if event not in calendar_event_objs.keys():
-                insert_into_calendar(service, event, calendars['personal'])
-                send_notification(f"Новая игра: {event}")             
-                new_count += 1
+                with open("rejected_events.json", "r") as f:
+                    rejected_events = [Event(**json.loads(line)) for line in f]
+                if event in rejected_events:
+                    continue
+                if ask_confirmation(f"Новая игра: {event}"):
+                    insert_into_calendar(service, event, calendars['personal'])
+                    new_count += 1
+                else:
+                    with open("rejected_events.json", "a") as f:
+                        f.write(json.dumps(event.to_json()) + "\n")
 
         # Delete events that are in the calendar but not in the parsed list (cancellations)             
         for event, event_id in calendar_event_objs.items():
             if event not in parsed_events:
                 if event.league == "сер":
-                    service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
-                    logger.info(f"Deleted event: {event}")
-                    send_notification(f"Отменена игра: {event}")
-                    deleted_count += 1
+                    if ask_confirmation(f"Отменена игра: {event}"):
+                        service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
+                        logger.info(f"Deleted event: {event}")
+                        del_count += 1
 
-        if new_count > 0 or deleted_count > 0:
-            logger.info(f"Added {new_count} events and deleted {deleted_count} events.")
-            send_notification(f"{f'Добавлено {new_count} игр' if new_count > 0 else ''}{f'\nУдалено {deleted_count} игр' if deleted_count > 0 else ''}")
+        if new_count > 0 or del_count > 0:
+            logger.info(f"Added {new_count} events and deleted {del_count} events.")
+            send_notification(f'''{f'Добавлено {new_count} игр' if new_count > 0 else ''}
+                                {f'\nУдалено {del_count} игр' if del_count > 0 else ''}''')
         else:
             logger.info("No changes detected.")
     except Exception as e:
-        logger.error(f"Couldn't refresh calendar: {e}")
+        logger.error(f"Couldn't refresh calendar: {e}", exc_info=True)

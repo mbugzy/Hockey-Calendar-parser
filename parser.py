@@ -55,6 +55,14 @@ class Event:
     def __hash__(self):
         return hash((self.dateTime, self.teams))
 
+    def to_json(self):
+        return {
+            'dateTime': self.dateTime,
+            'arena': self.arena,
+            'league': self.league,
+            'teams': self.teams
+        }
+
 
 
 def fetch_html(url: str) -> str | None:

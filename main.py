@@ -31,3 +31,7 @@ if __name__ == "__main__":
     logger.info("-"*80)
     logger.clean_logs_up_to_date((datetime.now()-timedelta(days=10)).strftime("%Y%m%d"))
     
+    #Clear rejected events on wednesday and sunday to reask just in case
+    if datetime.now().isoweekday() == 3 or datetime.now().isoweekday() == 7:
+        with open("rejected_events.json", "w") as f:
+            f.write("")          
