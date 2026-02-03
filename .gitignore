@@ -3,6 +3,4 @@ __pycache__
 *.ini
 *.json
 Logs
-test.py
-test.html
-telegram_token
+test.*
