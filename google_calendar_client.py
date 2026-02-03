@@ -10,6 +10,12 @@ from collections import defaultdict
 from parser import Event
 from telegram_notifications import ask_confirmation, send_notification
 import json
+import configparser
+
+
+config = configparser.ConfigParser()
+config.read("urls.ini")
+
 
 logger = Logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -129,6 +135,7 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
         calendar_event_objs = defaultdict(str)
         new_count = 0
         del_count = 0
+        notify_list = config['telegram']['notify_list'].split(',')
         # reformat events from calendar to Event objects with their ids
         for event in raw_cal_events['items']:
             calendar_event_objs.update({from_calendar_format(event): event['id']})    
@@ -143,9 +150,14 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
                 if ask_confirmation(f"Новая игра: {event}"):
                     insert_into_calendar(service, event, calendars['personal'])
                     new_count += 1
+                    for chat_id in notify_list:
+                        send_notification(f"Новая игра: {event}", chat_id)
                 else:
                     with open("rejected_events.json", "a") as f:
                         f.write(json.dumps(event.to_json()) + "\n")
+                    for chat_id in notify_list:
+                        send_notification(f"Отклонена игра: {event}", chat_id)
+                    
 
         # Delete events that are in the calendar but not in the parsed list (cancellations)             
         for event, event_id in calendar_event_objs.items():

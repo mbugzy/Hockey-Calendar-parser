@@ -10,3 +10,4 @@ table_name = table_url
 [telegram]
 token = telegram_bot_token
 chat_id = telegram_chat_id
+notify_list = chat_id1,chat_id2
