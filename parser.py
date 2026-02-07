@@ -128,8 +128,9 @@ def parse_events_nhl(url: str) -> list[Event]:
         return events
 
     soup = BeautifulSoup(html_content, 'html.parser')    
-    # last_games = soup.find('div', class_="timetable__unit js-calendar-last-games-header")
-    event_elements = soup.find_all('div', class_="timetable__unit js-calendar-games-header")    
+    # last_games = soup.find('div', class_="timetable__unit js-schedule-games-cont", style="display: none;")
+    event_elements = soup.find_all('div', class_="timetable__unit js-schedule-games-cont" , style=None)
+    event_elements = [event for event in event_elements if re.search(r'^\D', event.find('div', class_="timetable__score-main").text.strip())]
     try:
         for unit_date in event_elements:
             date_span = unit_date.find('span')            
@@ -138,7 +139,7 @@ def parse_events_nhl(url: str) -> list[Event]:
             date = date_str[0] + '.' + Months[date_str[1][:3]] + '.' + datetime.now().strftime('%Y') if date_str else None    
             games = unit_date.find_all('li')
             for game in games:
-                time = game.find('div', class_="timetable__time").text.strip() if game.find('div', class_="timetable__time") and game.find('div', class_="timetable__time").text != '(не задано)' else None            
+                time = game.find('span', class_="timetable__time").text.strip() if game.find('span', class_="timetable__time") and game.find('span', class_="timetable__time").text != '(не задано)' else None            
                 place = game.find('span', class_="timetable__place-name").text.strip()
                 arena = ARENAS[place if place and place != '(не задано)' else 'Хз'] if place in ARENAS else None
                 team1, team2 = (x.text.strip() for x in game.find('div', class_="timetable__middle").find_all('div', class_="timetable__team-name"))

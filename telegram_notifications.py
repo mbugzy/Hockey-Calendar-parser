@@ -13,7 +13,15 @@ TOKEN = config['telegram']['token']
 BASE_URL = f'https://api.telegram.org/bot{TOKEN}/'
 
 def reformat_with_markdown(text):
-
+    game_changed_pattern = r'(\w+\s\w+:)\s(\w+,\s\d{2}\.\d{2}\s\d{2}:\d{2})\s(\w+\s\w+)\s(.+?)\svs\s(.+)'
+    other_pattern = r''
+    another_pattern = r''
+    if re.match(game_changed_pattern, text):    
+        return re.sub(game_changed_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
+    # if re.match(other_pattern, text):    
+        # return re.sub(other_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
+    # if re.match(another_pattern, text):    
+        # return re.sub(another_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
     return text
 
 
@@ -101,7 +109,7 @@ def ask_confirmation(text: str, chat_id: str = None) -> bool:
                             requests.post(f"{BASE_URL}answerCallbackQuery", json={"callback_query_id": cb['id']})
                             
                             # Update message to reflect choice
-                            status_text = "✅ Подтверждено" if user_response else "❌ Отменено"
+                            status_text = "✅ *Подтверждено*" if user_response else "❌ *Отменено*"
                             edit_payload = {
                                 "chat_id": chat_id,
                                 "message_id": message_id,
