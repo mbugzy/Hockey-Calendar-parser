@@ -14,14 +14,18 @@ BASE_URL = f'https://api.telegram.org/bot{TOKEN}/'
 
 def reformat_with_markdown(text):
     game_changed_pattern = r'(\w+\s\w+:)\s(\w+,\s\d{2}\.\d{2}\s\d{2}:\d{2})\s(\w+\s\w+)\s(.+?)\svs\s(.+)'
-    other_pattern = r''
-    another_pattern = r''
+    week_report_pattern = r'(\w+\s\w+\s\d{2}\.\d{2}\s-\s\d{2}\.\d{2}:)\n\n'
+    # another_pattern = r''
     if re.match(game_changed_pattern, text):    
-        return re.sub(game_changed_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
-    # if re.match(other_pattern, text):    
-        # return re.sub(other_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
+        text = re.sub(game_changed_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
+    if re.search(week_report_pattern, text):
+        text = re.sub(week_report_pattern, r'**\1**\n\n', text)        
+        text = re.sub(r'(.*?)\s*(\d+:\d+)\s*(.*)', r'\1 \2 \3', text)                
+        text = re.sub(r'(.*?)\s*(\d+:\d+)\s*(.*)', r'*\1* \2 *\3*', text)        
+        text = re.sub(r'(\d\(\d\+\d\))(.*)', r'*\1*\2', text)
+        text = re.sub(r'\nNone None .+?(\n|$)', r'\n', text)              
     # if re.match(another_pattern, text):    
-        # return re.sub(another_pattern, r'*\1*\n\2\n\3\n\4 vs \5',text)
+        # text = re.sub(another_pattern, r'',text)
     return text
 
 
@@ -31,6 +35,7 @@ def send_notification(text: str, chat_id: str = None) -> bool:
     
     Args:
         text (str): Text to send
+        chat_id (str): Chat ID to send to, personal chat if default
     
     Returns:
         bool: True if notification was sent successfully, False otherwise
@@ -55,6 +60,7 @@ def ask_confirmation(text: str, chat_id: str = None) -> bool:
     
     Args:
         text (str): Text to send
+        chat_id (str): Chat ID to send to, personal chat if default
     
     Returns:
         bool: True if user confirmed, False otherwise
