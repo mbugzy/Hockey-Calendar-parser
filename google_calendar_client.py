@@ -149,24 +149,24 @@ def refresh_calendar(service: Resource, calendars: dict[str, str], parsed_events
                     continue
                 if ask_confirmation(f"Новая игра: {event}"):
                     insert_into_calendar(service, event, calendars['personal'])
-                    new_count += 1
-                    for chat_id in notify_list:
-                        send_notification(f"Новая игра: {event}", chat_id)
+                    new_count += 1                    
                 else:
                     with open("rejected_events.json", "a") as f:
                         f.write(json.dumps(event.to_json()) + "\n")
-                    for chat_id in notify_list:
-                        send_notification(f"Отклонена игра: {event}", chat_id)
+                for chat_id in notify_list:
+                    send_notification(f"Новая игра: {event}", chat_id)
                     
 
         # Delete events that are in the calendar but not in the parsed list (cancellations)             
         for event, event_id in calendar_event_objs.items():
             if event not in parsed_events:
-                if event.league == "сер":
-                    if ask_confirmation(f"Отменена игра: {event}"):
-                        service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
-                        logger.info(f"Deleted event: {event}")
-                        del_count += 1
+                if event.league == "сер":                    
+                    service.events().delete(calendarId=get_calendar_id_by_name(service, calendars['personal']), eventId=event_id).execute()
+                    logger.info(f"Deleted event: {event}")
+                    del_count += 1
+                    send_notification(f"Отменена игра: {event}")
+                    for chat_id in notify_list:
+                        send_notification(f"Отменена игра: {event}", chat_id)
 
         if new_count > 0 or del_count > 0:
             logger.info(f"Added {new_count} events and deleted {del_count} events.")

@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 from telegram_notifications import send_notification
 import configparser
 import re
+from logger import Logger
+
+logger=Logger(__name__)
 
 config = configparser.ConfigParser()
 config.read("urls.ini")
@@ -12,23 +15,28 @@ base_url = re.match(r'(https?://[^/]+)', list_url).group(1)
     
 
 def get_match_info(url: str) -> str:
-    req = requests.get(url)
-    soup = BeautifulSoup(req.text, 'html.parser')
+    try:    
+        req = requests.get(url)    
+        soup = BeautifulSoup(req.text, 'html.parser')
 
-    team1, team2 = soup.find_all('p', class_='report-nameteam')
-    score = soup.find('p', class_='result').text    
-    best_players = soup.find_all('table', class_="text-left table broadcasting4")[:2]
-    
-    best_players_list = []
-    for player in best_players:
-        pl = player.find_all('tr')[1].find_all('td') if len(player.find_all('tr'))>1 else None
-        pl_name, pl_score = pl[0].text if pl else None, pl[1].text if pl else None
-        best_players_list.append(f'{pl_name} {pl_score}')
+        team1, team2 = soup.find_all('p', class_='report-nameteam')
+        score = soup.find('p', class_='result').text    
+        best_players = soup.find_all('table', class_="text-left table broadcasting4")[:2]
+        
+        best_players_list = []
+        for player in best_players:
+            pl = player.find_all('tr')[1].find_all('td') if len(player.find_all('tr'))>1 else None
+            pl_name, pl_score = pl[0].text if pl else None, pl[1].text if pl else None
+            best_players_list.append(f'{pl_name} {pl_score}')
+    except Exception as e:
+        logger.error(f"Coudn't fetch match'es info: {e}")
 
     return f'{team1.text} {score} {team2.text}\nЗвезды матча:\n{best_players_list[0] + " " + team1.text if best_players_list[0] else "-"}\n{best_players_list[1] + " " + team2.text if best_players_list[1] else "-"}'
 
-req = requests.get(list_url)
-
+try: 
+    req = requests.get(list_url)
+except Exception as e:
+    logger.error(f"{list_url} unavailible. {e}")
 soup = BeautifulSoup(req.text, 'html.parser')
 event_elements = soup.find('tbody').find_all('tr')
 

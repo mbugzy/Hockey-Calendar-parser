@@ -1,8 +1,6 @@
 import requests
-import os
 import re
 import time
-from datetime import datetime
 from logger import Logger
 import configparser
 
@@ -49,8 +47,11 @@ def send_notification(text: str, chat_id: str = None) -> bool:
         "text": text,
         "parse_mode": "Markdown"
     }
-
-    response = requests.post(f"{BASE_URL}sendMessage", json=payload)
+    try:
+        response = requests.post(f"{BASE_URL}sendMessage", json=payload)
+    except Exception as e:
+        logger.error(f"Error sending notification: {e}")
+        return False
     return response.status_code == 200
 
 
@@ -83,7 +84,11 @@ def ask_confirmation(text: str, chat_id: str = None) -> bool:
         "reply_markup": keyboard
     }
 
-    response = requests.post(f"{BASE_URL}sendMessage", json=payload)
+    try:
+        response = requests.post(f"{BASE_URL}sendMessage", json=payload)
+    except Exception as e:
+        logger.error(f"Error sending message: {e}")
+        return False
     if response.status_code != 200:
         logger.error(f"Failed to send message: {response.text}")
         return False
@@ -137,5 +142,8 @@ def ask_confirmation(text: str, chat_id: str = None) -> bool:
         "text": f"{text}\n\nTimeout (No response)",
         "parse_mode": "Markdown"
     }
-    requests.post(f"{BASE_URL}editMessageText", json=edit_payload)
-    return False
+    try:
+        requests.post(f"{BASE_URL}editMessageText", json=edit_payload)
+    except Exception as e:
+        logger.error(f"Error editing message: {e}")        
+    return True
