@@ -2,13 +2,18 @@ import logging
 from datetime import datetime
 import os
 
-class Logger():
+
+class Logger:
     def __init__(self, name):
         self.name = name
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)        
-        self.formatter = logging.Formatter("{levelname} - {message}", style="{", datefmt="%H:%M")
-        self.file_handler = logging.FileHandler(f"Logs/log_{datetime.now().strftime('%Y%m%d')}.log")
+        self.logger.setLevel(logging.DEBUG)
+        self.formatter = logging.Formatter(
+            "{levelname} - {message}", style="{", datefmt="%H:%M"
+        )
+        self.file_handler = logging.FileHandler(
+            f"Logs/log_{datetime.now().strftime('%Y%m%d')}.log"
+        )
         self.file_handler.setFormatter(self.formatter)
         self.logger.addHandler(self.file_handler)
         self.console_handler = logging.StreamHandler()
@@ -37,5 +42,5 @@ class Logger():
 
     def clean_logs_up_to_date(self, date):
         for file in os.listdir("Logs"):
-            if file.endswith(".log") and file < f'log_{date}.log':
+            if file.endswith(".log") and file < f"log_{date}.log":
                 os.remove(os.path.join("Logs", file))
