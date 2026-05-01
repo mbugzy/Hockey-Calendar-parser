@@ -182,7 +182,10 @@ def parse_events_nhl(url: str) -> list[Event]:
                 )
                 dt = pytz.timezone("Europe/Minsk").localize(dt).strftime(dt_format)
                 if arena is not None:
-                    events.append(Event(dt, arena, "сер", f"{team1} vs {team2}"))
+                    events.append(Event(dt,
+                                        arena,
+                                        'сер',
+                                        f'{team1} vs {team2}'))
         return events
     except Exception as e:
         logger.error(f"Error parsing nhl games: {e}")
